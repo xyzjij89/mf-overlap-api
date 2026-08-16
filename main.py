@@ -5,6 +5,7 @@ Admin bulk upload → Store all schemes → Users search & compare
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import pandas as pd
@@ -45,21 +46,19 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 supabase: Optional[Client] = None
 
 if SUPABASE_URL and SUPABASE_KEY:
-    try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        print(f"Supabase initialization error: {e}")
+    supabase = create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
 
 
 def get_db():
     if not supabase:
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Supabase not configured. "
-                "Set SUPABASE_URL and SUPABASE_SERVICE_KEY in Railway Variables."
-            )
+            detail="Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY"
         )
+
     return supabase
 
 
@@ -77,7 +76,11 @@ class OverlapRequest(BaseModel):
     fund_a_name: str
     fund_b_name: str
     as_of_month: Optional[str] = None
-    fuzzy_threshold: int = Field(default=82, ge=70, le=95)
+    fuzzy_threshold: int = Field(
+        default=82,
+        ge=70,
+        le=95
+    )
 
 
 class CommonStock(BaseModel):
@@ -100,7 +103,7 @@ class OverlapResponse(BaseModel):
 
 
 # ============================================================
-# HELPERS
+# PARSING HELPERS
 # ============================================================
 
 def clean_column_name(col: str) -> str:
@@ -120,9 +123,11 @@ def find_column(
     }
 
     for name in possible_names:
+
         target = clean_column_name(name)
 
         for cname, original in cleaned.items():
+
             if target in cname or cname in target:
                 return original
 
@@ -134,34 +139,34 @@ def is_equity(name: str) -> bool:
     name = str(name).lower()
 
     skip = [
-        "treps",
-        "reverse repo",
-        "cash",
-        "net current",
-        "margin",
-        "derivative",
-        "futures",
-        "option",
-        "cblo",
-        "mutual fund units",
-        "government security",
-        "treasury bill",
-        "commercial paper",
-        "certificate of deposit",
-        "bonds",
-        "debenture",
-        "ncd",
-        "reits",
-        "invits",
-        "others",
-        "receivables",
-        "payables",
-        "fixed deposit"
+        'treps',
+        'reverse repo',
+        'cash',
+        'net current',
+        'margin',
+        'derivative',
+        'futures',
+        'option',
+        'cblo',
+        'mutual fund units',
+        'government security',
+        'treasury bill',
+        'commercial paper',
+        'certificate of deposit',
+        'bonds',
+        'debenture',
+        'ncd',
+        'reits',
+        'invits',
+        'others',
+        'receivables',
+        'payables',
+        'fixed deposit'
     ]
 
     return not any(
-        keyword in name
-        for keyword in skip
+        kw in name
+        for kw in skip
     )
 
 
@@ -169,7 +174,7 @@ def normalize_name(name: str) -> str:
 
     name = str(name).lower().strip()
 
-    for word in [
+    for w in [
         "ltd",
         "limited",
         "ltd.",
@@ -180,7 +185,7 @@ def normalize_name(name: str) -> str:
         "india",
         "the"
     ]:
-        name = name.replace(word, "")
+        name = name.replace(w, "")
 
     return " ".join(name.split())
 
@@ -285,6 +290,7 @@ def calculate_overlap(
     stocks_b = list(holdings_b.keys())
 
     matches = {}
+
     remaining_b = set(stocks_b)
 
     # Exact normalized matches
@@ -295,6 +301,7 @@ def calculate_overlap(
             if normalize_name(sa) == normalize_name(sb):
 
                 matches[sa] = sb
+
                 remaining_b.remove(sb)
 
                 break
@@ -317,9 +324,11 @@ def calculate_overlap(
         if best and best[1] >= threshold:
 
             matches[sa] = best[0]
+
             remaining_b.remove(best[0])
 
     common = []
+
     total = 0.0
 
     for sa, sb in matches.items():
@@ -327,7 +336,10 @@ def calculate_overlap(
         wa = holdings_a.get(sa, 0)
         wb = holdings_b.get(sb, 0)
 
-        mn = min(wa, wb)
+        mn = min(
+            wa,
+            wb
+        )
 
         total += mn
 
@@ -345,7 +357,8 @@ def calculate_overlap(
     )
 
     unique_a = [
-        s for s in stocks_a
+        s
+        for s in stocks_a
         if s not in matches
     ]
 
@@ -390,7 +403,12 @@ def parse_excel_bytes(
 
             df = None
 
-            for header_row in [0, 1, 2, 3]:
+            for header_row in [
+                0,
+                1,
+                2,
+                3
+            ]:
 
                 try:
 
@@ -409,6 +427,7 @@ def parse_excel_bytes(
                     ):
 
                         df = temp
+
                         break
 
                 except Exception:
@@ -470,8 +489,16 @@ def parse_excel_bytes(
             clean["Weight"] = (
                 clean["Weight"]
                 .astype(str)
-                .str.replace("%", "", regex=False)
-                .str.replace(",", "", regex=False)
+                .str.replace(
+                    "%",
+                    "",
+                    regex=False
+                )
+                .str.replace(
+                    ",",
+                    "",
+                    regex=False
+                )
                 .str.strip()
             )
 
@@ -491,7 +518,9 @@ def parse_excel_bytes(
             if only_equity:
 
                 clean = clean[
-                    clean["Stock"].apply(is_equity)
+                    clean["Stock"].apply(
+                        is_equity
+                    )
                 ]
 
             if clean.empty:
@@ -508,7 +537,8 @@ def parse_excel_bytes(
                     )
                     .str.strip(),
 
-                    clean["Weight"].round(2)
+                    clean["Weight"]
+                    .round(2)
                 )
             )
 
@@ -516,25 +546,22 @@ def parse_excel_bytes(
                 sheet_name
             )
 
-            results[sheet_name.strip()] = {
+            results[
+                sheet_name.strip()
+            ] = {
                 "category": cat,
                 "scheme_type": guess_scheme_type(cat),
                 "holdings": holdings
             }
 
-        except Exception as e:
-
-            print(
-                f"Error parsing sheet {sheet_name}: {e}"
-            )
-
+        except Exception:
             continue
 
     return results
 
 
 # ============================================================
-# ROOT
+# HOME
 # ============================================================
 
 @app.get("/")
@@ -544,12 +571,13 @@ def root():
         "message": "India MF Overlap API + Supabase",
         "version": "2.0",
         "docs": "/docs",
+        "upload": "/upload",
         "status": "running"
     }
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================
 
 @app.get("/health")
@@ -557,12 +585,14 @@ def health():
 
     return {
         "status": "ok",
-        "supabase_configured": bool(supabase)
+        "supabase_configured": bool(
+            supabase
+        )
     }
 
 
 # ============================================================
-# ADMIN BULK UPLOAD
+# BULK EXCEL UPLOAD API
 # ============================================================
 
 @app.post("/admin/bulk-upload")
@@ -583,7 +613,10 @@ async def bulk_upload(
 
     for file in files:
 
-        if not file.filename.endswith(
+        if not file.filename:
+            continue
+
+        if not file.filename.lower().endswith(
             (".xlsx", ".xls")
         ):
             continue
@@ -662,14 +695,20 @@ async def bulk_upload(
             "schemes_parsed": len(parsed)
         })
 
-    db.table("upload_logs").insert({
-        "filename": ", ".join(
-            [f.filename for f in files]
-        ),
-        "schemes_added": total_added,
-        "schemes_updated": total_updated,
-        "as_of_month": as_of_month
-    }).execute()
+    if files:
+
+        db.table("upload_logs").insert({
+            "filename": ", ".join(
+                [
+                    f.filename
+                    for f in files
+                    if f.filename
+                ]
+            ),
+            "schemes_added": total_added,
+            "schemes_updated": total_updated,
+            "as_of_month": as_of_month
+        }).execute()
 
     return {
         "message": "Bulk upload complete",
@@ -678,6 +717,379 @@ async def bulk_upload(
         "schemes_updated": total_updated,
         "files_processed": results_summary
     }
+
+
+# ============================================================
+# EASY BULK UPLOAD WEB PAGE
+# ============================================================
+
+@app.get(
+    "/upload",
+    response_class=HTMLResponse
+)
+def upload_page():
+
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>MF Overlap - Bulk Excel Upload</title>
+
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    margin: 0;
+    padding: 30px;
+}
+
+.container {
+    max-width: 700px;
+    margin: auto;
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+h1 {
+    margin-top: 0;
+    color: #111827;
+}
+
+label {
+    display: block;
+    margin-top: 20px;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+input,
+button {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    font-size: 15px;
+}
+
+input[type="file"] {
+    background: #f9fafb;
+}
+
+button {
+    margin-top: 25px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+#result {
+    margin-top: 25px;
+    padding: 15px;
+    border-radius: 8px;
+    background: #f3f4f6;
+    white-space: pre-wrap;
+    display: none;
+}
+
+.success {
+    background: #ecfdf5 !important;
+    color: #065f46;
+}
+
+.error {
+    background: #fef2f2 !important;
+    color: #991b1b;
+}
+
+.info {
+    color: #6b7280;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>India MF Overlap</h1>
+
+<h2>Bulk Excel Upload</h2>
+
+<p class="info">
+Select multiple AMC Excel files at once.
+All files will be processed and stored in Supabase.
+</p>
+
+<form id="uploadForm">
+
+<label>
+Excel Files
+</label>
+
+<input
+    type="file"
+    id="files"
+    name="files"
+    accept=".xlsx,.xls"
+    multiple
+    required
+>
+
+<div class="info">
+You can select multiple Excel files using Ctrl/Cmd + click.
+</div>
+
+
+<label>
+As of Month
+</label>
+
+<input
+    type="month"
+    id="as_of_month"
+    name="as_of_month"
+    required
+>
+
+
+<label>
+AMC Name (Optional)
+</label>
+
+<input
+    type="text"
+    id="amc_name"
+    name="amc_name"
+    placeholder="Example: HDFC Mutual Fund"
+>
+
+
+<label>
+Minimum Weight
+</label>
+
+<input
+    type="number"
+    id="min_weight"
+    name="min_weight"
+    value="0.01"
+    step="0.01"
+>
+
+
+<button
+    type="submit"
+    id="uploadButton"
+>
+    Upload All Excel Files
+</button>
+
+</form>
+
+
+<div id="result"></div>
+
+</div>
+
+
+<script>
+
+const form =
+    document.getElementById("uploadForm");
+
+const result =
+    document.getElementById("result");
+
+const button =
+    document.getElementById("uploadButton");
+
+
+form.addEventListener(
+    "submit",
+    async function(event) {
+
+        event.preventDefault();
+
+        const files =
+            document.getElementById("files").files;
+
+        const month =
+            document.getElementById("as_of_month").value;
+
+        const amc =
+            document.getElementById("amc_name").value;
+
+        const minWeight =
+            document.getElementById("min_weight").value;
+
+
+        if (!files.length) {
+
+            alert("Please select at least one Excel file.");
+
+            return;
+        }
+
+
+        if (!month) {
+
+            alert("Please select the month.");
+
+            return;
+        }
+
+
+        const formData =
+            new FormData();
+
+
+        for (
+            let i = 0;
+            i < files.length;
+            i++
+        ) {
+
+            formData.append(
+                "files",
+                files[i]
+            );
+        }
+
+
+        formData.append(
+            "as_of_month",
+            month
+        );
+
+
+        if (amc) {
+
+            formData.append(
+                "amc_name",
+                amc
+            );
+        }
+
+
+        formData.append(
+            "only_equity",
+            "false"
+        );
+
+
+        formData.append(
+            "min_weight",
+            minWeight
+        );
+
+
+        button.disabled = true;
+
+        button.innerText =
+            "Uploading...";
+
+
+        result.style.display =
+            "block";
+
+        result.className =
+            "";
+
+        result.innerText =
+            "Uploading " +
+            files.length +
+            " Excel file(s)...";
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/admin/bulk-upload",
+                    {
+                        method: "POST",
+                        body: formData
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.detail ||
+                    "Upload failed"
+                );
+            }
+
+
+            result.className =
+                "success";
+
+
+            result.innerText =
+                "Upload successful!\\n\\n" +
+                JSON.stringify(
+                    data,
+                    null,
+                    2
+                );
+
+
+        } catch (error) {
+
+            result.className =
+                "error";
+
+
+            result.innerText =
+                "Upload failed:\\n\\n" +
+                error.message;
+
+        }
+
+
+        button.disabled = false;
+
+        button.innerText =
+            "Upload All Excel Files";
+
+    }
+);
+
+</script>
+
+</body>
+</html>
+"""
 
 
 # ============================================================
@@ -690,7 +1102,10 @@ def search_schemes(
     as_of_month: Optional[str] = None,
     category: Optional[str] = None,
     scheme_type: Optional[str] = None,
-    limit: int = Query(20, le=50)
+    limit: int = Query(
+        20,
+        le=50
+    )
 ):
 
     db = get_db()
@@ -698,9 +1113,7 @@ def search_schemes(
     query = (
         db.table("schemes")
         .select(
-            "id, scheme_name, amc_name, "
-            "category, scheme_type, "
-            "holdings_count, as_of_month"
+            "id, scheme_name, amc_name, category, scheme_type, holdings_count, as_of_month"
         )
     )
 
@@ -747,18 +1160,23 @@ def search_schemes(
 
 
 # ============================================================
-# GET SINGLE SCHEME
+# GET SCHEME
 # ============================================================
 
 @app.get("/schemes/{scheme_id}")
-def get_scheme(scheme_id: int):
+def get_scheme(
+    scheme_id: int
+):
 
     db = get_db()
 
     res = (
         db.table("schemes")
         .select("*")
-        .eq("id", scheme_id)
+        .eq(
+            "id",
+            scheme_id
+        )
         .single()
         .execute()
     )
@@ -781,7 +1199,9 @@ def get_scheme(scheme_id: int):
     "/overlap",
     response_model=OverlapResponse
 )
-def overlap(req: OverlapRequest):
+def overlap(
+    req: OverlapRequest
+):
 
     db = get_db()
 
@@ -807,8 +1227,7 @@ def overlap(req: OverlapRequest):
             )
 
         res = (
-            q
-            .order(
+            q.order(
                 "as_of_month",
                 desc=True
             )
@@ -825,6 +1244,7 @@ def overlap(req: OverlapRequest):
 
         return res.data[0]
 
+
     sa = fetch_scheme(
         req.fund_a_name,
         req.as_of_month
@@ -835,12 +1255,11 @@ def overlap(req: OverlapRequest):
         req.as_of_month
     )
 
+
     month = sa["as_of_month"]
 
-    if (
-        sa["as_of_month"]
-        != sb["as_of_month"]
-    ):
+
+    if sa["as_of_month"] != sb["as_of_month"]:
 
         sb2 = fetch_scheme(
             req.fund_b_name,
@@ -850,11 +1269,13 @@ def overlap(req: OverlapRequest):
         if sb2:
             sb = sb2
 
+
     ov, common, uniq_a, uniq_b = calculate_overlap(
         sa["holdings"],
         sb["holdings"],
         threshold=req.fuzzy_threshold
     )
+
 
     return OverlapResponse(
         fund_a=sa["scheme_name"],
@@ -923,15 +1344,14 @@ if __name__ == "__main__":
 
     import uvicorn
 
-    port = int(
-        os.environ.get(
-            "PORT",
-            8000
-        )
-    )
-
     uvicorn.run(
         "main_supabase:app",
         host="0.0.0.0",
-        port=port
+        port=int(
+            os.getenv(
+                "PORT",
+                "8000"
+            )
+        ),
+        reload=True
     )
